@@ -1,10 +1,14 @@
-# git-worktree-share
+# worktree-share
 
-Automatically symlinks gitignored files (`.env`, local configs, etc.) into git worktrees.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-## Convention
+Stop copying `.env` files between worktrees.
 
-Put files you want shared across worktrees in `.git/share/` inside your repo:
+`git worktree add` is great — until you realize your `.env`, `.env.local`, and other gitignored files didn't come with it. `worktree-share` fixes that by automatically symlinking them from a single source of truth into every worktree.
+
+## Setup
+
+Put the files you want shared in `.git/share/` inside your repo:
 
 ```
 your-repo/
@@ -12,19 +16,18 @@ your-repo/
     share/
       .env
       .env.local
-      any-other-ignored-file
 ```
 
-That's it. New worktrees get symlinks to these files automatically. Existing worktrees can be updated with `wt-share`.
+That's it. Every new worktree gets symlinks to these files automatically.
 
 ## Install
 
 ```bash
-cd /path/to/git-worktree-share
+cd /path/to/worktree-share
 bash install.sh
 ```
 
-The script will offer to add `wt-share` to your PATH automatically.
+The script installs a global `post-checkout` hook and offers to add `wt-share` to your PATH.
 
 ## Usage
 
@@ -38,7 +41,11 @@ wt-share
 
 ## How it works
 
-- A global `post-checkout` hook detects when a linked worktree is created and symlinks every file from `.git/share/` into the worktree root.
-- `wt-share` does the same thing retroactively for all existing linked worktrees.
-- The `.git/` directory is shared across all worktrees, so the files in `share/` are always reachable regardless of which worktree you're in.
-- Symlinks point to absolute paths inside `.git/`, so editing the file in one place updates it everywhere.
+- A global `post-checkout` hook fires when a linked worktree is created and symlinks every file from `.git/share/` into the worktree root.
+- `wt-share` does the same retroactively for all existing linked worktrees.
+- `.git/` is shared across all worktrees, so `.git/share/` is always reachable from any of them.
+- Symlinks use absolute paths, so editing a file in one worktree updates it everywhere.
+
+## License
+
+[MIT](LICENSE)
