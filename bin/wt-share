@@ -37,7 +37,24 @@ while IFS= read -r worktree_path; do
     for file in "${files[@]}"; do
         [[ -f "$file" ]] || continue
         fname=$(basename "$file")
-        ln -sf "$file" "$worktree_path/$fname"
+        target="$worktree_path/$fname"
+
+        if [[ -e "$target" || -L "$target" ]]; then
+            # Already a symlink pointing to the same source — skip
+            if [[ -L "$target" ]] && [[ "$(readlink -f "$target")" == "$(readlink -f "$file")" ]]; then
+                echo "  -> $fname (unchanged)"
+                continue
+            fi
+
+            # Different: compare content and ask before overwriting
+            if ! diff -q "$target" "$file" &>/dev/null; then
+                printf "  %s already exists and differs. Override? [y/N] " "$fname"
+                read -r answer </dev/tty
+                [[ "$answer" =~ ^[Yy]$ ]] || { echo "  -> $fname (skipped)"; continue; }
+            fi
+        fi
+
+        ln -sf "$file" "$target"
         echo "  -> $fname"
     done
     (( applied++ ))
