@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Automatically symlink shared worktree files into newly created linked worktrees.
+# Fires on every checkout; exits early unless we're in a linked worktree.
+
+# Only act on branch checkouts, not file checkouts
+[[ "$3" == "1" ]] || exit 0
+
+git_dir=$(git rev-parse --git-dir 2>/dev/null)         || exit 0
+git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || exit 0
+
+# In the main worktree these are the same; skip it
+[[ "$git_dir" != "$git_common_dir" ]] || exit 0
+
+shared_dir="$git_common_dir/share"
+[[ -d "$shared_dir" ]] || exit 0
+
+worktree_root=$(git rev-parse --show-toplevel)
+
+shopt -s dotglob nullglob
+for file in "$shared_dir"/*; do
+    [[ -f "$file" ]] || continue
+    ln -sf "$file" "$worktree_root/$(basename "$file")"
+done

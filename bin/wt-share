@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Apply shared worktree files to all existing linked worktrees of the current repo.
+# Usage: wt-share
+
+git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || {
+    echo "error: not in a git repository" >&2
+    exit 1
+}
+
+shared_dir="$git_common_dir/share"
+
+if [[ ! -d "$shared_dir" ]]; then
+    echo "No shared files found."
+    echo "Create $shared_dir and put your files there."
+    echo "They will be symlinked into every linked worktree automatically."
+    exit 0
+fi
+
+shopt -s dotglob nullglob
+files=("$shared_dir"/*)
+
+if [[ ${#files[@]} -eq 0 ]]; then
+    echo "No files in $shared_dir"
+    exit 0
+fi
+
+applied=0
+
+while IFS= read -r worktree_path; do
+    wt_git_dir=$(git -C "$worktree_path" rev-parse --git-dir 2>/dev/null)         || continue
+    wt_common_dir=$(git -C "$worktree_path" rev-parse --git-common-dir 2>/dev/null) || continue
+
+    # Skip the main worktree
+    [[ "$wt_git_dir" != "$wt_common_dir" ]] || continue
+
+    echo "$worktree_path"
+    for file in "${files[@]}"; do
+        [[ -f "$file" ]] || continue
+        fname=$(basename "$file")
+        ln -sf "$file" "$worktree_path/$fname"
+        echo "  -> $fname"
+    done
+    (( applied++ ))
+done < <(git worktree list --porcelain | awk '$1 == "worktree" { print $2 }')
+
+if [[ $applied -eq 0 ]]; then
+    echo "No linked worktrees found."
+fi
