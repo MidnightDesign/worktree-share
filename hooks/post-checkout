@@ -16,8 +16,9 @@ shared_dir="$git_common_dir/share"
 
 worktree_root=$(git rev-parse --show-toplevel)
 
-shopt -s dotglob nullglob
-for file in "$shared_dir"/*; do
-    [[ -f "$file" ]] || continue
-    ln -sf "$file" "$worktree_root/$(basename "$file")"
-done
+while IFS= read -r -d '' file; do
+    rel="${file#"$shared_dir"/}"
+    target="$worktree_root/$rel"
+    mkdir -p "$(dirname "$target")"
+    ln -sf "$file" "$target"
+done < <(find "$shared_dir" -type f -print0)

@@ -16,8 +16,7 @@ if [[ ! -d "$shared_dir" ]]; then
     exit 0
 fi
 
-shopt -s dotglob nullglob
-files=("$shared_dir"/*)
+mapfile -d '' files < <(find "$shared_dir" -type f -print0)
 
 if [[ ${#files[@]} -eq 0 ]]; then
     echo "No files in $shared_dir"
@@ -35,27 +34,27 @@ while IFS= read -r worktree_path; do
 
     echo "$worktree_path"
     for file in "${files[@]}"; do
-        [[ -f "$file" ]] || continue
-        fname=$(basename "$file")
-        target="$worktree_path/$fname"
+        rel="${file#"$shared_dir"/}"
+        target="$worktree_path/$rel"
 
         if [[ -e "$target" || -L "$target" ]]; then
             # Already a symlink pointing to the same source — skip
             if [[ -L "$target" ]] && [[ "$(readlink -f "$target")" == "$(readlink -f "$file")" ]]; then
-                echo "  -> $fname (unchanged)"
+                echo "  -> $rel (unchanged)"
                 continue
             fi
 
             # Different: compare content and ask before overwriting
             if ! diff -q "$target" "$file" &>/dev/null; then
-                printf "  %s already exists and differs. Override? [y/N] " "$fname"
+                printf "  %s already exists and differs. Override? [y/N] " "$rel"
                 read -r answer </dev/tty
-                [[ "$answer" =~ ^[Yy]$ ]] || { echo "  -> $fname (skipped)"; continue; }
+                [[ "$answer" =~ ^[Yy]$ ]] || { echo "  -> $rel (skipped)"; continue; }
             fi
         fi
 
+        mkdir -p "$(dirname "$target")"
         ln -sf "$file" "$target"
-        echo "  -> $fname"
+        echo "  -> $rel"
     done
     (( applied++ ))
 done < <(git worktree list --porcelain | awk '$1 == "worktree" { print $2 }')
