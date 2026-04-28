@@ -26,12 +26,6 @@ fi
 applied=0
 
 while IFS= read -r worktree_path; do
-    wt_git_dir=$(git -C "$worktree_path" rev-parse --git-dir 2>/dev/null)         || continue
-    wt_common_dir=$(git -C "$worktree_path" rev-parse --git-common-dir 2>/dev/null) || continue
-
-    # Skip the main worktree
-    [[ "$wt_git_dir" != "$wt_common_dir" ]] || continue
-
     echo "$worktree_path"
     for file in "${files[@]}"; do
         rel="${file#"$shared_dir"/}"
