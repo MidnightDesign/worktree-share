@@ -41,7 +41,7 @@ wt-share
 
 ## How it works
 
-- A global `post-checkout` hook fires when a linked worktree is created and symlinks every file from `.git/share/` into the worktree root.
+- A global `post-checkout` hook fires when a linked worktree is created and symlinks every file from `.git/share/` into the worktree root. A file that already exists with different content is left alone — you get a notice and can run `wt-share` to resolve it interactively.
 - `wt-share` does the same retroactively for all existing linked worktrees.
 - `.git/` is shared across all worktrees, so `.git/share/` is always reachable from any of them.
 - Symlinks use absolute paths, so editing a file in one worktree updates it everywhere.
