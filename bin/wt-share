@@ -1,11 +1,38 @@
 #!/usr/bin/env bash
-# Apply shared worktree files to all existing linked worktrees of the current repo.
-# Usage: wt-share
+# Apply shared worktree files to worktrees of the current repo.
+#
+# Usage:
+#   wt-share              Apply to every worktree.
+#   wt-share --current    Apply only to the worktree containing the cwd
+#                         (used by the post-checkout hook).
+#
+# Files that already exist with differing content are only overwritten
+# after an interactive confirmation; without a terminal they are skipped.
 
-git_common_dir=$(git rev-parse --git-common-dir 2>/dev/null) || {
+case "${1-}" in
+    "" | --current) ;;
+    *)
+        echo "usage: wt-share [--current]" >&2
+        exit 2
+        ;;
+esac
+
+# Absolute path format matters: from the main worktree root git would return
+# the relative ".git", producing symlink targets that dangle in other worktrees.
+git_common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || {
     echo "error: not in a git repository" >&2
     exit 1
 }
+
+if [[ "${1-}" == --current ]]; then
+    current=$(git rev-parse --show-toplevel 2>/dev/null) || {
+        echo "error: not inside a worktree" >&2
+        exit 1
+    }
+    worktrees=("$current")
+else
+    mapfile -t worktrees < <(git worktree list --porcelain | sed -n 's/^worktree //p')
+fi
 
 shared_dir="$git_common_dir/share"
 
@@ -23,36 +50,36 @@ if [[ ${#files[@]} -eq 0 ]]; then
     exit 0
 fi
 
-applied=0
+# Prompt before overwriting only when the prompt is visible and answerable.
+interactive=0
+[[ -t 0 && -t 1 ]] && interactive=1
 
-while IFS= read -r worktree_path; do
+for worktree_path in "${worktrees[@]}"; do
     echo "$worktree_path"
     for file in "${files[@]}"; do
         rel="${file#"$shared_dir"/}"
         target="$worktree_path/$rel"
 
-        if [[ -e "$target" || -L "$target" ]]; then
-            # Already a symlink pointing to the same source — skip
-            if [[ -L "$target" ]] && [[ "$(readlink -f "$target")" == "$(readlink -f "$file")" ]]; then
-                echo "  -> $rel (unchanged)"
+        # Already a symlink pointing to the same source — skip
+        if [[ -L "$target" && "$(readlink -f "$target")" == "$(readlink -f "$file")" ]]; then
+            echo "  -> $rel (unchanged)"
+            continue
+        fi
+
+        # -e follows symlinks, so a dangling symlink holds no content
+        # worth protecting and falls through to be relinked.
+        if [[ -e "$target" ]] && ! diff -q "$target" "$file" &>/dev/null; then
+            if [[ $interactive -eq 0 ]]; then
+                echo "wt-share: skipped $rel (exists with different content; run wt-share to overwrite)" >&2
                 continue
             fi
-
-            # Different: compare content and ask before overwriting
-            if ! diff -q "$target" "$file" &>/dev/null; then
-                printf "  %s already exists and differs. Override? [y/N] " "$rel"
-                read -r answer </dev/tty
-                [[ "$answer" =~ ^[Yy]$ ]] || { echo "  -> $rel (skipped)"; continue; }
-            fi
+            printf "  %s already exists and differs. Override? [y/N] " "$rel"
+            read -r answer
+            [[ "$answer" =~ ^[Yy]$ ]] || { echo "  -> $rel (skipped)"; continue; }
         fi
 
         mkdir -p "$(dirname "$target")"
         ln -sf "$file" "$target"
         echo "  -> $rel"
     done
-    (( applied++ ))
-done < <(git worktree list --porcelain | awk '$1 == "worktree" { print $2 }')
-
-if [[ $applied -eq 0 ]]; then
-    echo "No linked worktrees found."
-fi
+done
